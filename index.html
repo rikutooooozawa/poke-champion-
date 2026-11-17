@@ -1677,7 +1677,7 @@ document.addEventListener('click',e=>{
  else if(a==='goMatch'){state.party=+t.dataset.p;state.meIdx=+t.dataset.m;state.oppSp=t.dataset.sp;state.setIdx=setsFor(t.dataset.sp).length>1?'all':0;state.tab='match';state.c.hpMe=100;state.c.hpOpp=100;render();window.scrollTo(0,0);return;}
  else if(a==='resetParty'){const pi=state.editParty;state.parties[pi]=JSON.parse(JSON.stringify(DEFAULT_PARTIES[pi]));saveParties();cmpCache={};}
  else return;
- state.team=loadTeam();loadView();try{const j=localStorage.getItem('pchamp_judge');if(JUDGE[j])state.judge=j;}catch(e){}render();
+ render();
 });
 document.addEventListener('toggle',e=>{if(e.target.dataset&&e.target.dataset.cond)state.condOpen=e.target.open;},true);
 function onInput(e){
@@ -1711,7 +1711,7 @@ function onInput(e){
   else if(f==='mv'){m.moves[+t.dataset.j]=t.value.trim();}
   else m[f]=t.value;
   saveParties();cmpCache={};
-  if(e.type==='change') state.team=loadTeam();loadView();try{const j=localStorage.getItem('pchamp_judge');if(JUDGE[j])state.judge=j;}catch(e){}render();
+  if(e.type==='change') render();
  }
 }
 document.addEventListener('focusin',e=>{const t=e.target;if(t.dataset&&t.dataset.search){const l=t.nextElementSibling;l.innerHTML=pickList(t.dataset.search,t.dataset.search!=='opp'?'':t.value,t.dataset.i);l.classList.add('on');if(t.dataset.search!=='opp')t.select();}});
