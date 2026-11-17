@@ -103,9 +103,26 @@ table.cmp.sm td{font-size:15px;font-weight:700}
 .seg{display:flex;background:#eceef5;border-radius:10px;padding:3px;margin:8px 0 4px}
 .seg button{flex:1;border:0;background:none;padding:7px 0;border-radius:8px;font-size:14px;color:var(--sub)}
 .seg button.on{background:#fff;color:var(--ink);font-weight:700;box-shadow:0 1px 2px rgba(0,0,0,.12)}
+
+.seg.top{margin:0 0 10px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.best{display:inline-block;background:var(--g);color:#fff;font-size:11px;border-radius:6px;padding:1px 6px;vertical-align:1px}
+.bestmv{background:#f2fbf5;border-radius:8px;padding-left:6px;padding-right:6px}
+.btn.sm2{padding:7px 12px;font-size:13px;margin-top:6px}
+textarea.code{width:100%;height:64px;font-size:12px;border:1px solid var(--line);border-radius:8px;padding:6px;font-family:monospace;margin-top:6px}
+table.wk td{font-size:13px;padding:4px 2px}
+.e2c{background:#fde7e7;color:#b42020;font-weight:700}.e4c{background:#d33a3a;color:#fff;font-weight:700}.ehc{background:#e6efff;color:#3f6fd0}.e0c{background:#eee;color:#888}
+.spdlist{border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:8px 0}
+.sr{display:flex;gap:8px;align-items:center;padding:6px 8px;border-bottom:1px solid var(--line);font-size:13px}
+.sr:last-child{border-bottom:0}
+.sr .sv{width:38px;font-weight:700;text-align:right}
+.sr .sn{flex:0 0 auto;font-weight:600}
+.sr .sl{color:var(--sub);font-size:11.5px;margin-left:auto;text-align:right}
+.sr.me{background:#eef0ff}
+.sr.me .sn{color:var(--acc)}
+table.wk .tb{font-size:10px;padding:0 3px;margin:0;white-space:nowrap}table.wk th{font-size:10.5px}
 </style></head>
 <body><header><h1><span>ポケチャン ダメ計＆対面ナビ</span><span class="mode"><button data-mode="single">シングル</button><button data-mode="double">ダブル</button></span></h1>
-<nav class="tabs"><button data-tab="match">対面</button><button data-tab="team">選出</button><button data-tab="cmp">比較</button><button data-tab="edit">編集</button><button data-tab="help">説明</button></nav></header>
+<nav class="tabs"><button data-tab="match">対面</button><button data-tab="team">選出</button><button data-tab="cmp">分析</button><button data-tab="edit">編集</button><button data-tab="help">説明</button></nav></header>
 <main id="view"></main>
 <script>// ===== ポケモンデータ（名前|タイプ|H-A-B-C-D-S|標準の特性） =====
 const RAW_BASE=`フシギバナ|くさ/どく|80-82-83-100-100-80|ようりょくそ
@@ -1083,14 +1100,45 @@ function analyze(me,opp,env0){
  return {env,atk,dfn,sMe,sOp,advice,memo,score,myBest,oppBest};
 }
 
-if(typeof module!=='undefined') module.exports={FORMS,MOVES,OPP,DEFAULT_PARTIES,buildBattler,analyze,calc,koInfo,calcStats,STONES,ITEMS,NATURES,getSets};
+// 耐久調整：相手の技を確定で耐える H と B/D の最小振りを探す
+function findBulk(mon,megaOn,oppB,env0,mvName){
+ const mv=MOVES[mvName]; if(!mv||mv.cat==='X') return null;
+ const dKey=(mv.cat==='P'||mv.psyshock)?'B':'D';
+ const other=SK.filter(k=>k!=='H'&&k!==dKey).reduce((a,k)=>a+(+mon.pts[k]||0),0);
+ const budget=Math.min(64,66-other);
+ const test=(h,d)=>{const m2=Object.assign({},mon,{pts:Object.assign({},mon.pts,{H:h,[dKey]:d})});const b=buildBattler(m2,'me',megaOn);
+  const env=resolveField(b,oppB,Object.assign({},env0,{hp:Object.assign({},env0.hp,{me:100})}));
+  const r=calc(oppB,b,mvName,env); if(!r||r.zero) return {p:0,max:0,H:b.stats.H};
+  r.attAb=oppB.ability; const p=koProb(r,b,env,1); return {p,max:r.dmg[15],min:r.dmg[0],H:b.stats.H};};
+ const now=test(+mon.pts.H||0,+mon.pts[dKey]||0);
+ let sure=null, half=null;
+ for(let t=0;t<=Math.min(64,budget);t++){
+  for(let h=Math.min(32,t);h>=Math.max(0,t-32);h--){const d=t-h; const r=test(h,d);
+   if(!half&&r.p<=0.5) half={h,d,t,...r};
+   if(r.p===0){sure={h,d,t,...r};break;} }
+  if(sure) break;
+ }
+ return {dKey,budget,now,sure,half,nowPts:{h:+mon.pts.H||0,d:+mon.pts[dKey]||0}};
+}
+// 弱点チェック（特性・ふうせん込み）
+function typeEffOn(b,type){
+ let e=typeEff(type,b.types); const ab=b.ability;
+ if(type==='じめん'&&(ab==='ふゆう'||ab==='どしょく'||b.item==='ふうせん')) e=0;
+ if(type==='みず'&&['ちょすい','よびみず','かんそうはだ'].includes(ab)) e=0;
+ if(type==='くさ'&&ab==='そうしょく') e=0;
+ if(type==='でんき'&&['ちくでん','ひらいしん','でんきエンジン'].includes(ab)) e=0;
+ if(type==='ほのお'&&['もらいび','こんがりボディ'].includes(ab)) e=0;
+ if((type==='ほのお'||type==='こおり')&&ab==='あついしぼう') e*=0.5;
+ return e;
+}
+if(typeof module!=='undefined') module.exports={FORMS,MOVES,OPP,DEFAULT_PARTIES,buildBattler,analyze,calc,koInfo,calcStats,STONES,ITEMS,NATURES,getSets,findBulk,typeEffOn,effSpeed,TYPES};
 
 // ===== 画面 =====
 const LS='pchamp_parties_v1';
 function loadParties(){try{const s=localStorage.getItem(LS);if(s){const p=JSON.parse(s);if(Array.isArray(p)&&p.length===3)return p;}}catch(e){}return JSON.parse(JSON.stringify(DEFAULT_PARTIES));}
 function saveParties(){try{localStorage.setItem(LS,JSON.stringify(state.parties));}catch(e){}}
 const zr=()=>({A:0,B:0,C:0,D:0,S:0});
-const state={judge:'mid',team:null,tab:'match',mode:'single',party:0,meIdx:0,mega:{},oppSp:null,setIdx:0,parties:loadParties(),editParty:0,cmpParty:0,
+const state={ana:'cmp',spdFilter:'',spdTw:false,judge:'mid',team:null,tab:'match',mode:'single',party:0,meIdx:0,mega:{},oppSp:null,setIdx:0,parties:loadParties(),editParty:0,cmpParty:0,
  c:{weatherSel:'auto',terrainSel:'auto',crit:false,burnMe:false,burnOpp:false,wallMe:'',wallOpp:'',twMe:false,twOpp:false,tr:false,hhMe:false,hhOpp:false,popMe:false,popOpp:false,disguise:true,glaiveMe:false,glaiveOpp:false,hits:3,fainted:0,rkMe:zr(),rkOpp:zr(),hpMe:100,hpOpp:100}};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -1127,7 +1175,7 @@ function render(){
  document.querySelectorAll('.mode button').forEach(b=>b.classList.toggle('on',b.dataset.mode===state.mode));
  const v=$('#view');
  if(state.tab==='match') v.innerHTML=renderMatch();
- else if(state.tab==='cmp') v.innerHTML=renderCompare();
+ else if(state.tab==='cmp') v.innerHTML=renderAna();
  else if(state.tab==='team') v.innerHTML=renderTeam();
  else if(state.tab==='edit') v.innerHTML=renderEdit();
  else v.innerHTML=renderHelp();
@@ -1162,7 +1210,6 @@ function renderMatch(){
  opps.forEach(o=>{h+=`<div class="mon"><div class="mn">${esc(o.s.label)}：${esc(o.b.form)} ${o.b.types.map(tb).join('')}</div><div class="sub">${esc(o.s.nature)}／${esc(o.b.ability)}／${esc(o.s.item)}／${o.s.ptsKey}振り<br><b>${statLine(o.b.stats)}</b><br>技：${o.s.moves.map(esc).join('・')}</div></div>`;});
  if(!pool[state.oppSp]) h+=`<div class="adv warn">このポケモンはよく見る型が未登録なので、種族値から自動で作った仮の型（タイプ一致技のみ）で計算しています。</div>`;
  h+=hpSlider('hpOpp','相手の残りHP',c.hpOpp,opps[0].b)+`</section>`;
- h+=renderConditions();
  // 分析
  const env=envFrom(c,state.mode);
  const res=opps.map(o=>({o,a:analyze(me,o.b,env)}));
@@ -1177,6 +1224,7 @@ function renderMatch(){
   if(r.a.memo.length) h+=`<ul class="memo">${r.a.memo.map(m=>`<li>${esc(m)}</li>`).join('')}</ul>`;
  });
  h+=`</section>`;
+ h+=renderConditions();
  // 自分の攻撃
  h+=`<section class="card"><h2>自分の攻撃 → 相手</h2>`;
  me.moves.forEach((mv,mi)=>{
@@ -1184,7 +1232,8 @@ function renderMatch(){
   const md=MOVES[mv];
   if(!md){h+=`<div class="mv"><div class="mt">${esc(mv)} <span class="warn">未登録の技（計算できません）</span></div></div>`;return;}
   if(md.cat==='X'){h+=`<div class="mv st"><div class="mt">${esc(mv)} <small>変化技</small></div></div>`;return;}
-  h+=`<div class="mv"><div class="mt">${esc(mv)} ${tb(first?first.type:md.type)} <small>${md.cat==='P'?'物理':'特殊'} 威力${md.pow}${first&&first.prio?` 優先度${first.prio>0?'+':''}${first.prio}`:''}</small></div>`;
+  const isBest=res.length===1&&res[0].a.myBest&&res[0].a.myBest.name===mv;
+  h+=`<div class="mv${isBest?' bestmv':''}"><div class="mt">${isBest?'<span class="best">おすすめ</span> ':''}${esc(mv)} ${tb(first?first.type:md.type)} <small>${md.cat==='P'?'物理':'特殊'} 威力${md.pow}${first&&first.prio?` 優先度${first.prio>0?'+':''}${first.prio}`:''}</small></div>`;
   res.forEach(r=>{const x=r.a.atk.find(z=>z.name===mv);if(!x)return;h+=dmgRow(x,r.o.b,res.length>1?r.o.s.label:'',r.a.env,'opp');});
   if(first&&first.notes.length) h+=`<div class="note">${first.notes.map(esc).join('／')}</div>`;
   h+=`</div>`;
@@ -1201,6 +1250,30 @@ function renderMatch(){
   });
  });
  h+=`</section>`;
+ if(res.length===1) h+=renderBulk(meMon,me,res[0]);
+ return h;
+}
+function renderBulk(meMon,me,r){
+ const dmgMoves=r.o.s.moves.filter(m=>MOVES[m]&&MOVES[m].cat!=='X');
+ if(!dmgMoves.length) return '';
+ let mv=state.bulkMove; if(!dmgMoves.includes(mv)) mv=r.a.oppBest?r.a.oppBest.name:dmgMoves[0];
+ let h=`<section class="card"><h2>耐久調整 <small>（この攻撃を耐えるには？）</small></h2>
+ <div class="sub">相手の技を1発確定で耐えるのに必要な、HPと${'ぼうぎょ／とくぼう'}の最小の振り方を探します。こうげき・とくこう・すばやさの振りはそのままです。</div>
+ <select class="big" data-act="bulkMove">${dmgMoves.map(m=>`<option ${m===mv?'selected':''}>${esc(m)}</option>`).join('')}</select>`;
+ const R=findBulk(meMon,megaOn(state.party,state.meIdx),r.o.b,envFrom(state.c,state.mode),mv);
+ if(!R) return h+'</section>';
+ const dj=R.dKey==='B'?'B（ぼうぎょ）':'D（とくぼう）';
+ const pc=(x)=>Math.round(x.p*1000)/10;
+ h+=`<div class="adv spd">今の振り（H${R.nowPts.h}・${R.dKey}${R.nowPts.d}）：被ダメ最大 ${Math.floor(R.now.max/R.now.H*1000)/10}% → ${R.now.p===0?'<b class="g">確定で耐える</b>':R.now.p>=1?'<b class="r">確定で倒される</b>':`<b class="y">${pc(R.now)}%で倒される</b>`}</div>`;
+ if(R.sure){
+  const same=R.sure.h===R.nowPts.h&&R.sure.d===R.nowPts.d;
+  h+=`<div class="adv ok">確定で耐える最小の振り：<b>H${R.sure.h}・${R.dKey}${R.sure.d}</b>（合計${R.sure.t}）<br><small>被ダメ最大 ${Math.floor(R.sure.max/R.sure.H*1000)/10}%</small>${R.now.p===0&&R.sure.t<R.nowPts.h+R.nowPts.d?`<br><small>今より ${R.nowPts.h+R.nowPts.d-R.sure.t} ポイント少なくても耐えられます（余りを他に回せます）</small>`:''}</div>`;
+  if(!same) h+=`<button class="btn sm2" data-act="applyBulk" data-h="${R.sure.h}" data-d="${R.sure.d}" data-k="${R.dKey}">この振り方をパーティーに反映</button>`;
+ }else{
+  h+=`<div class="adv bad">HPと${dj}にいくら振っても、確定では耐えられません（使えるポイント ${R.budget}）。</div>`;
+  if(R.half) h+=`<div class="adv warn">50%以上の確率で耐える振り：<b>H${R.half.h}・${R.dKey}${R.half.d}</b>（倒される確率 ${pc(R.half)}%）</div>`;
+ }
+ h+=`<div class="sub">性格・持ち物・特性は今のままで計算しています。</div></section>`;
  return h;
 }
 function spdTxt(a,b,tr){if(a===b)return '<b>同速（運次第）</b>';const f=tr?a<b:a>b;return f?'<b class="g">自分が先</b>':'<b class="r">相手が先</b>';}
@@ -1363,6 +1436,60 @@ function renderTeam(){
  return h;
 }
 
+
+// ---------- 分析 ----------
+function renderAna(){
+ const subs=[['cmp','パーティー比較'],['weak','弱点チェック'],['speed','すばやさ']];
+ let h=`<div class="seg top">${subs.map(([k,l])=>`<button class="${state.ana===k?'on':''}" data-act="ana" data-v="${k}">${l}</button>`).join('')}</div>`;
+ if(state.ana==='weak') return h+renderWeak();
+ if(state.ana==='speed') return h+renderSpeed();
+ return h+renderCompare();
+}
+function renderWeak(){
+ const pi=state.party; const mons=state.parties[pi].mons; const idx=mons.map((m,i)=>validMon(m)?i:-1).filter(i=>i>=0);
+ let h=`<section class="card"><h2>弱点チェック</h2>${partyChips(pi,'party')}`;
+ if(!idx.length) return h+'<p class="sub">パーティーが空です。</p></section>';
+ const bs=idx.map(i=>meBattler(pi,i));
+ h+=`<div class="sub">各タイプの技を受けた時の倍率です（特性・ふうせん込み、メガストーン持ちはメガ後）。<b class="r">赤</b>＝ばつぐん、<b style="color:#3f6fd0">青</b>＝いまひとつ、灰＝無効。</div>`;
+ h+=`<div class="tw"><table class="cmp sm wk"><tr><th>技</th>${bs.map(b=>`<th>${esc(b.form.replace('メガ','M'))}</th>`).join('')}<th>弱</th><th>耐</th></tr>`;
+ const warn=[]; const good=[];
+ TYPES.forEach(t=>{
+  let w=0,r=0;
+  const cells=bs.map(b=>{const e=typeEffOn(b,t); if(e>1)w++; if(e<1)r++;
+   const txt=e===0?'無':e>=4?'4':e>=2?'2':e===1?'':e<=0.25?'¼':'½'; const cl=e===0?'e0c':e>1?(e>=4?'e4c':'e2c'):e<1?'ehc':'';
+   return `<td class="${cl}">${txt}</td>`;}).join('');
+  if(w>=3&&r<=1) warn.push(t); if(w===0) good.push(t);
+  h+=`<tr><td>${tb(t)}</td>${cells}<td class="${w>=3?'e2c':''}">${w}</td><td>${r}</td></tr>`;
+ });
+ h+=`</table></div>`;
+ h+=warn.length?`<div class="adv bad">⚠ 3匹以上が弱点で、受けられるポケモンが少ないタイプ：${warn.map(tb).join(' ')}</div>`:`<div class="adv good">3匹以上が弱点のタイプはありません</div>`;
+ h+=`<div class="sub">弱点のポケモンがいないタイプ：${good.map(tb).join(' ')||'なし'}</div></section>`;
+ // 技範囲
+ h+=`<section class="card"><h2>攻撃の範囲</h2><div class="sub">パーティーの攻撃技で、どのタイプにばつぐんを取れるか。</div>`;
+ const atkTypes=new Set(); bs.forEach(b=>b.moves.forEach(m=>{const md=MOVES[m];if(md&&md.cat!=='X'){let ty=md.type;if(ty==='ノーマル'&&b.ability&&({'スカイスキン':1,'フェアリースキン':1,'フリーズスキン':1,'エレキスキン':1,'ドラゴンスキン':1})[b.ability])ty={'スカイスキン':'ひこう','フェアリースキン':'フェアリー','フリーズスキン':'こおり','エレキスキン':'でんき','ドラゴンスキン':'ドラゴン'}[b.ability];atkTypes.add(ty);}}));
+ const noSE=TYPES.filter(d=>![...atkTypes].some(a=>typeEff(a,[d])>1));
+ h+=`<div class="sub">持っている攻撃技のタイプ：${[...atkTypes].map(tb).join(' ')}</div>`;
+ h+=noSE.length?`<div class="adv warn">ばつぐんを取れない単タイプ：${noSE.map(tb).join(' ')}</div>`:`<div class="adv good">全タイプにばつぐんを取れます</div>`;
+ h+=`</section>`;
+ return h;
+}
+function renderSpeed(){
+ const pi=state.party; const mode=state.mode; const env=defaultEnv(mode);
+ let h=`<section class="card"><h2>すばやさ比較</h2>${partyChips(pi,'party')}
+ <div class="sub">自分のパーティーと、よく見る相手の型のすばやさを速い順に並べています。スカーフ・メガシンカ込みです。</div>
+ <label class="tg"><input type="checkbox" data-sp="tw" ${state.spdTw?'checked':''}> 自分側おいかぜ（×2）</label>
+ <input class="big" data-spfilter="1" placeholder="🔍 相手を名前で絞り込む" value="${esc(state.spdFilter)}" autocomplete="off">`;
+ const rows=[];
+ state.parties[pi].mons.forEach((m,i)=>{if(!validMon(m))return;const b=meBattler(pi,i);const e=Object.assign({},env,{tailwind:{me:state.spdTw,opp:false}});rows.push({me:1,name:b.form,label:`${b.nature}・S${+m.pts.S||0}${b.item==='こだわりスカーフ'?'・スカーフ':''}`,s:effSpeed(b,e)});});
+ const k=kata(state.spdFilter||'');
+ for(const sp of Object.keys(OPP[mode])){ if(k&&!kata(sp).includes(k)) continue;
+  OPP[mode][sp].forEach(set=>{const b=oppBattler(sp,set);rows.push({me:0,name:b.form,label:set.label+(set.item==='こだわりスカーフ'?'（×1.5）':''),s:effSpeed(b,env)});});}
+ rows.sort((a,b)=>b.s-a.s||a.me-b.me);
+ h+=`<div class="spdlist">${rows.map(r=>`<div class="sr ${r.me?'me':''}"><span class="sv">${r.s}</span><span class="sn">${r.me?'★ ':''}${esc(r.name)}</span><span class="sl">${esc(r.label)}</span></div>`).join('')}</div>`;
+ h+=`<div class="sub">同じ数字は同速（どちらが先かは運）。トリックルーム中は遅い方が先に動きます。</div></section>`;
+ return h;
+}
+
 // ---------- パーティー比較 ----------
 const SYM=['×','△','○','◎'];
 function matchScore(pi,i,sp,set,mode){const me=meBattler(pi,i);const o=oppBattler(sp,set);return analyze(me,o,defaultEnv(mode)).score;}
@@ -1432,6 +1559,11 @@ function renderEdit(){
   <div class="grid2">${[0,1,2,3].map(j=>`<label>技${j+1}<input list="dlMv" data-ed="mv" data-j="${j}" data-i="${i}" value="${esc(m.moves[j]||'')}">${m.moves[j]&&!MOVES[m.moves[j]]?'<small class="warn">未登録</small>':''}</label>`).join('')}</div></section>`;
  }
  h+=`<datalist id="dlAb">${ALL_AB.map(a=>`<option value="${a}">`).join('')}</datalist><datalist id="dlMv">${Object.keys(MOVES).map(a=>`<option value="${a}">`).join('')}</datalist>`;
+ let code='';try{code='PC1:'+btoa(unescape(encodeURIComponent(JSON.stringify(P))));}catch(e){}
+ h+=`<section class="card"><h2>パーティーを友達と共有</h2><div class="sub">このコードを友達に送ると、友達の「編集」で同じパーティーを読み込めます。</div>
+ <textarea class="code" readonly data-codeout="1">${esc(code)}</textarea><button class="btn sm2" data-act="copyCode">コードをコピー</button> <span class="sub" id="copyMsg"></span>
+ <h3>コードを読み込む</h3><div class="sub">友達からもらったコードを貼り付けて「読み込む」を押すと、今開いているパーティー（${esc(P.name)}）が置き換わります。</div>
+ <textarea class="code" data-codein="1" placeholder="PC1:… を貼り付け"></textarea><button class="btn sm2" data-act="importCode">読み込む</button> <span class="sub" id="impMsg"></span></section>`;
  h+=`<section class="card"><button class="btn" data-act="resetParty">このパーティーを初期状態に戻す</button></section>`;
  return h;
 }
@@ -1440,7 +1572,10 @@ function renderHelp(){
  <li><b>対面</b>：自分のポケモンと相手のポケモン・型を選ぶと、技ごとのダメージ（%）、何発で倒せるか、今の残りHPで倒せるか、おすすめ行動が出ます。</li>
  <li>相手の型が分からない時は「全部の型」を選ぶと、型ごとの結果を並べて比べられます。</li>
  <li>「相手の残りHP」を動かすと、その時点で倒せるか・倒れるかが変わります。</li>
- <li><b>比較</b>：登録した3つのパーティーが、よく見る相手にどれだけ戦えるかを一覧で比べられます。</li>
+ <li><b>選出</b>：相手の6匹を登録すると、相手の選出予想・おすすめ選出・相手ごとに出すべきポケモンが出ます。</li>
+ <li><b>分析</b>：パーティー比較（3パーティーの得意・苦手）、弱点チェック（タイプごとの弱点の数と攻撃範囲）、すばやさ比較（よく見る相手との速さの順番）を見られます。</li>
+ <li><b>耐久調整</b>：対面画面の一番下で、相手の技を確定で耐えるのに必要なHPと防御（特防）の振り方を探せます。見つかった振り方はボタン1つでパーティーに反映できます。</li>
+ <li><b>共有</b>：編集画面の「パーティーを友達と共有」で、パーティーをコードにして送ったり、もらったコードを読み込んだりできます。</li>
  <li><b>編集</b>：パーティーの持ち物・性格・能力ポイント・技を変えられます。</li></ol></section>
  <section class="card"><h2>計算の前提</h2><ul class="help">
  <li>レベル50。実数値は HP＝種族値＋75＋能力ポイント、その他＝（種族値＋20＋能力ポイント）×性格補正。</li>
@@ -1467,6 +1602,16 @@ document.addEventListener('click',e=>{
   else{const P=state.parties[state.editParty];const k=+i;while(P.mons.length<=k)P.mons.push(null);
    if(!P.mons[k])P.mons[k]={sp:'',nature:'まじめ',ability:'',item:'なし',pts:{H:0,A:0,B:0,C:0,D:0,S:0},moves:['','','','']};
    P.mons[k].sp=v;if(v)P.mons[k].ability=FORMS[v].ab;saveParties();cmpCache={};}}
+ else if(a==='applyBulk'){const m=state.parties[state.party].mons[state.meIdx];m.pts.H=+t.dataset.h;m.pts[t.dataset.k]=+t.dataset.d;saveParties();cmpCache={};teamCache={};}
+ else if(a==='copyCode'){const ta=document.querySelector('[data-codeout]');const msg=document.getElementById('copyMsg');
+  const ok=()=>{msg.textContent='コピーしました';};const ng=()=>{ta.focus();ta.select();msg.textContent='選択したので長押しでコピーしてください';};
+  try{navigator.clipboard.writeText(ta.value).then(ok,ng);}catch(err){ng();} return;}
+ else if(a==='importCode'){const v=(document.querySelector('[data-codein]').value||'').trim();const msg=document.getElementById('impMsg');
+  try{if(!v.startsWith('PC1:'))throw 0;const P=JSON.parse(decodeURIComponent(escape(atob(v.slice(4)))));if(!P||!Array.isArray(P.mons))throw 0;
+   P.mons=P.mons.slice(0,6).map(m=>m&&FORMS[m.sp]?{sp:m.sp,nature:NATURES[m.nature]?m.nature:'まじめ',ability:String(m.ability||FORMS[m.sp].ab),item:String(m.item||'なし'),pts:Object.fromEntries(SK.map(k=>[k,Math.max(0,Math.min(32,+((m.pts||{})[k])||0))])),moves:(m.moves||[]).slice(0,4).map(String)}:null);
+   state.parties[state.editParty]={name:String(P.name||'読み込んだパーティー').slice(0,30),mons:P.mons};saveParties();cmpCache={};teamCache={};}
+  catch(err){msg.textContent='コードが正しくありません';return;} }
+ else if(a==='ana'){state.ana=t.dataset.v;}
  else if(a==='judge'){state.judge=t.dataset.v;try{localStorage.setItem('pchamp_judge',state.judge);}catch(e){}}
  else if(a==='clearTeam'){state.team={opp:['','','','','',''],seen:[0,0,0,0,0,0],mine:[0,0,0,0,0,0]};saveTeam();}
  else if(a==='cmpParty'){state.cmpParty=+i;}
@@ -1485,6 +1630,9 @@ function onInput(e){
  if(t.dataset.c){const k=t.dataset.c;let v=t.type==='checkbox'?t.checked:t.value;if(t.dataset.num||k==='hits'||k==='fainted')v=+v;state.c[k]=v;if(e.type==='input'&&t.type==='range'){const lab=t.parentElement.querySelector('label b');if(lab)lab.textContent=v+'%';return;}render();return;}
  if(t.dataset.rk){state.c[t.dataset.rk][t.dataset.k]=+t.value;render();return;}
  if(t.dataset.mega){state.mega[megaKey(state.party,state.meIdx)]=t.checked;cmpCache={};render();return;}
+ if(t.dataset.sp==='tw'){state.spdTw=t.checked;render();return;}
+ if(t.dataset.spfilter){state.spdFilter=t.value;if(e.type==='change')render();else{clearTimeout(window._sf);window._sf=setTimeout(()=>{const pos=t.selectionStart;render();const n=document.querySelector('[data-spfilter]');if(n){n.focus();n.setSelectionRange(pos,pos);}},250);}return;}
+ if(t.dataset.act==='bulkMove'){state.bulkMove=t.value;render();return;}
  if(t.dataset.act==='oppSp'){state.oppSp=t.value;state.setIdx=0;state.c.hpOpp=100;render();return;}
  if(t.dataset.pn){state.parties[state.editParty].name=t.value;saveParties();return;}
  if(t.dataset.ed){
