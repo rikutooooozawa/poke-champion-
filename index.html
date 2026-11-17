@@ -120,6 +120,31 @@ table.wk td{font-size:13px;padding:4px 2px}
 .sr.me{background:#eef0ff}
 .sr.me .sn{color:var(--acc)}
 table.wk .tb{font-size:10px;padding:0 3px;margin:0;white-space:nowrap}table.wk th{font-size:10.5px}
+
+.chip.add{border-style:dashed;color:var(--acc)}
+.ced{border:2px dashed #c9cdf5;border-radius:10px;padding:10px;margin:6px 0 8px;background:#fafbff}
+.ced h3{margin-top:0}
+.btn.gray{background:#8a90ad}.btn.red{background:var(--r)}
+
+.hrow{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.psel{font-size:14px;padding:4px 6px;max-width:55%}
+@media (prefers-color-scheme: dark){
+:root{--bg:#0f1117;--card:#1a1d27;--ink:#e8eaf2;--sub:#9ba0b8;--line:#2c3040;--acc:#7c87ff}
+header{background:#0b0d12}
+.mon,.adv,.adv.spd,.ced,.qk button,select,input,textarea.code,.pi,.plist,.seg.top{background:#232735;color:var(--ink)}
+.chip{background:#232735;color:var(--ink);border-color:var(--line)}
+.chip.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.adv.good{background:#123323;color:#7fe0a8}.adv.ok{background:#1e2346}.adv.warn{background:#3a2f12}.adv.bad{background:#3d1717;color:#ff9b9b}
+.bestmv{background:#15291f}.sr.me{background:#1e2346}.tag{background:#123323;color:#7fe0a8}
+.bar{background:#2a2e3d}.bar .cur{background:#1d4a32}.bar .d2{background:#6b2b2b}
+.seg{background:#232735}.seg button.on{background:#3a3f55;color:#fff}
+table.cmp th{background:#232735}.tot td{background:#1f2230}
+.s3{background:#123323}.s2{background:#1e2346}.s1{background:#3a2f12}.s0{background:#3d1717}
+.e2c{background:#3d1717;color:#ff9b9b}.ehc{background:#17264a;color:#8fb2ff}.e0c{background:#2a2a2a;color:#888}
+.lb{background:#2c3150}.ko{border-color:var(--line)}
+.sub b{color:var(--ink)}.g{color:#5fd391}.r{color:#ff7b7b}
+.pi:active{background:#2c3150}.ced{border-color:#3a3f6a}
+}
 </style></head>
 <body><header><h1><span>ポケチャン ダメ計＆対面ナビ</span><span class="mode"><button data-mode="single">シングル</button><button data-mode="double">ダブル</button></span></h1>
 <nav class="tabs"><button data-tab="match">対面</button><button data-tab="team">選出</button><button data-tab="cmp">分析</button><button data-tab="edit">編集</button><button data-tab="help">説明</button></nav></header>
@@ -1062,7 +1087,7 @@ function analyze(me,opp,env0){
     advice.push({lv:surv>=0.9999?'ok':'warn',t:`${surv>=0.9999?'○':'△'} 相手の『${oppBest.name}』を${surv>=0.9999?'耐えて':'耐えれば（耐える確率'+Math.round(surv*1000)/10+'%）'}、『${myBest.name}』で倒せます`});
     score=Math.max(score,surv>=0.9999?2:1);
    }else if(score===0){
-    advice.push({lv:'bad',t:`× 先に『${oppBest.name}』で倒される可能性 ${Math.round(oppK1*1000)/10}% → 交代がおすすめ`});
+    advice.push({lv:'bad',t:oppK1>=0.9999?`× 先に『${oppBest.name}』で確定で倒される → 交代がおすすめ`:`× 先に『${oppBest.name}』で倒される可能性 ${Math.round(oppK1*1000)/10}% → 交代がおすすめ`});
    }
   }
   if(score===0&&myBest){
@@ -1138,7 +1163,7 @@ const LS='pchamp_parties_v1';
 function loadParties(){try{const s=localStorage.getItem(LS);if(s){const p=JSON.parse(s);if(Array.isArray(p)&&p.length===3)return p;}}catch(e){}return JSON.parse(JSON.stringify(DEFAULT_PARTIES));}
 function saveParties(){try{localStorage.setItem(LS,JSON.stringify(state.parties));}catch(e){}}
 const zr=()=>({A:0,B:0,C:0,D:0,S:0});
-const state={ana:'cmp',spdFilter:'',spdTw:false,judge:'mid',team:null,tab:'match',mode:'single',party:0,meIdx:0,mega:{},oppSp:null,setIdx:0,parties:loadParties(),editParty:0,cmpParty:0,
+const state={custom:loadCustom(),draft:null,ana:'cmp',spdFilter:'',spdTw:false,judge:'mid',team:null,tab:'match',mode:'single',party:0,meIdx:0,mega:{},oppSp:null,setIdx:0,parties:loadParties(),editParty:0,cmpParty:0,
  c:{weatherSel:'auto',terrainSel:'auto',crit:false,burnMe:false,burnOpp:false,wallMe:'',wallOpp:'',twMe:false,twOpp:false,tr:false,hhMe:false,hhOpp:false,popMe:false,popOpp:false,disguise:true,glaiveMe:false,glaiveOpp:false,hits:3,fainted:0,rkMe:zr(),rkOpp:zr(),hpMe:100,hpOpp:100}};
 const $=s=>document.querySelector(s);
 const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -1170,6 +1195,8 @@ function pickList(kind,q,i){
  const more=list.length>40; list=list.slice(0,40);
  return list.map(n=>{const f=FORMS[n];return `<button class="pi" data-act="pick" data-kind="${kind}" ${i!=null?`data-i="${i}"`:''} data-v="${esc(n)}"><span>${esc(n)}</span>${f.t.map(tb).join('')}${kind!=='ed'&&pool[n]?' <span class="tag">型あり</span>':''}</button>`;}).join('')+(kind==='team'?`<button class="pi" data-act="pick" data-kind="team" data-i="${i}" data-v=""><span>（空きにする）</span></button>`:'')+(kind==='ed'?`<button class="pi" data-act="pick" data-kind="ed" data-i="${i}" data-v=""><span>（空きにする）</span></button>`:'')+(more?'<div class="pe">もっと文字を入れると絞り込めます</div>':'');
 }
+function saveView(){try{localStorage.setItem('pchamp_view',JSON.stringify({tab:state.tab,mode:state.mode,party:state.party,meIdx:state.meIdx,oppSp:state.oppSp,ana:state.ana}));}catch(e){}}
+function loadView(){try{const v=JSON.parse(localStorage.getItem('pchamp_view')||'null');if(v){['tab','mode','ana'].forEach(k=>{if(typeof v[k]==='string')state[k]=v[k];});if(v.party>=0&&v.party<3)state.party=v.party;if(v.meIdx>=0&&v.meIdx<6)state.meIdx=v.meIdx;if(v.oppSp&&FORMS[v.oppSp])state.oppSp=v.oppSp;}}catch(e){}}
 function render(){
  document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===state.tab));
  document.querySelectorAll('.mode button').forEach(b=>b.classList.toggle('on',b.dataset.mode===state.mode));
@@ -1179,32 +1206,56 @@ function render(){
  else if(state.tab==='team') v.innerHTML=renderTeam();
  else if(state.tab==='edit') v.innerHTML=renderEdit();
  else v.innerHTML=renderHelp();
+ saveView();
 }
 function partyChips(sel,act){return `<div class="chips">${state.parties.map((p,i)=>`<button class="chip ${i===sel?'on':''}" data-act="${act}" data-i="${i}">${esc(p.name||('パーティー'+(i+1)))}${p.mons.filter(validMon).length?'':'（空）'}</button>`).join('')}</div>`;}
 
+// ---------- 自分で作った相手の型 ----------
+const LSC='pchamp_custom_v1';
+function loadCustom(){try{const s=localStorage.getItem(LSC);if(s)return JSON.parse(s)||{};}catch(e){}return {};}
+function saveCustom(){try{localStorage.setItem(LSC,JSON.stringify(state.custom));}catch(e){}}
+function customOf(sp){const c=(state.custom[state.mode]||{})[sp];return c&&FORMS[c.form]?c:null;}
+function setsFor(sp){const base=getSets(sp,state.mode);const c=customOf(sp);return c?[...base,Object.assign({},c,{label:'★自分で作った型',ptsKey:'調整',custom:1})]:base;}
+function formsOf(sp){const base=FORMS[sp]&&FORMS[sp].mega?null:sp;const list=[sp];(MEGA_OF[sp]||[]).forEach(m=>list.push(m.form));return [...new Set(list)];}
+function renderCustomEditor(){
+ const d=state.draft; if(!d) return '';
+ const forms=formsOf(state.oppSp);
+ const sum=SK.reduce((a,k)=>a+(+d.pts[k]||0),0);
+ return `<div class="ced"><h3>✎ ${esc(state.oppSp)} の型を自分で作る</h3>
+ <div class="sub">対戦で見えた持ち物や技に合わせて直すと、その型で計算できます（この端末に保存）。</div>
+ <div class="grid2"><label>すがた<select data-cd="form">${forms.map(f=>`<option ${f===d.form?'selected':''}>${esc(f)}</option>`).join('')}</select></label>
+ <label>性格<select data-cd="nature">${Object.keys(NATURES).map(n=>`<option ${n===d.nature?'selected':''}>${n}</option>`).join('')}</select></label>
+ <label>特性<input list="dlAb" data-cd="ab" value="${esc(d.ab||'')}" placeholder="${esc(FORMS[d.form].ab)}"></label>
+ <label>持ち物<select data-cd="item">${ITEMS.map(t=>`<option ${t===d.item?'selected':''}>${t}</option>`).join('')}</select></label></div>
+ <div class="chips">${Object.keys(PT).map(k=>`<button class="chip" data-act="cdPreset" data-v="${k}">${k}振り</button>`).join('')}</div>
+ <div class="pts">${SK.map(k=>`<label>${k}<input type="number" min="0" max="32" inputmode="numeric" data-cd="pt" data-k="${k}" value="${+d.pts[k]||0}"></label>`).join('')}</div>
+ <div class="sub ${sum>66?'warn':''}">能力ポイント合計 ${sum}/66</div>
+ <div class="grid2">${[0,1,2,3].map(j=>`<label>技${j+1}<input list="dlMv" data-cd="mv" data-j="${j}" value="${esc(d.moves[j]||'')}">${d.moves[j]&&!MOVES[d.moves[j]]?'<small class="warn">未登録の技</small>':''}</label>`).join('')}</div>
+ <datalist id="dlAb">${ALL_AB.map(a=>`<option value="${a}">`).join('')}</datalist><datalist id="dlMv">${Object.keys(MOVES).map(a=>`<option value="${a}">`).join('')}</datalist>
+ <button class="btn sm2" data-act="cdSave">保存して計算</button> <button class="btn sm2 gray" data-act="cdCancel">やめる</button>${customOf(state.oppSp)?' <button class="btn sm2 red" data-act="cdDelete">この型を消す</button>':''}</div>`;
+}
 // ---------- 対面 ----------
 function renderMatch(){
  const pool=oppPool(); const spList=Object.keys(pool);
  if(!state.oppSp||!FORMS[state.oppSp]) {state.oppSp=spList[0];state.setIdx=0;}
- const sets=getSets(state.oppSp,state.mode); if(state.setIdx!=='all'&&!sets[state.setIdx]) state.setIdx=0;
+ const sets=setsFor(state.oppSp); if(state.setIdx!=='all'&&!sets[state.setIdx]) state.setIdx=0;
  const P=curParty(); const mons=P.mons;
  if(!validMon(mons[state.meIdx])) state.meIdx=mons.findIndex(validMon);
- let h=`<section class="card"><h2>パーティー</h2>${partyChips(state.party,'party')}</section>`;
- if(state.meIdx<0){return h+`<section class="card"><p>このパーティーにはまだポケモンがいません。「編集」タブで登録してください。</p></section>`;}
+ const psel=`<select class="psel" data-act="partySel">${state.parties.map((p,i)=>`<option value="${i}" ${i===state.party?'selected':''}>${esc(p.name||('パーティー'+(i+1)))}${p.mons.some(validMon)?'':'（空）'}</option>`).join('')}</select>`;
+ let h='';
+ if(state.meIdx<0){return `<section class="card"><h2>自分のポケモン ${psel}</h2><p>このパーティーにはまだポケモンがいません。「編集」タブで登録してください。</p></section>`;}
  const me=meBattler(state.party,state.meIdx); const c=state.c;
  const meMon=mons[state.meIdx]; const hasStone=STONES[meMon.item]&&STONES[meMon.item][0].includes(meMon.sp);
- h+=`<section class="card"><h2>自分のポケモン</h2><div class="chips">${mons.map((m,i)=>validMon(m)?`<button class="chip ${i===state.meIdx?'on':''}" data-act="me" data-i="${i}">${esc(m.sp)}</button>`:'').join('')}</div>
+ h+=`<section class="card"><h2 class="hrow">自分のポケモン ${psel}</h2><div class="chips">${mons.map((m,i)=>validMon(m)?`<button class="chip ${i===state.meIdx?'on':''}" data-act="me" data-i="${i}">${esc(m.sp)}</button>`:'').join('')}</div>
  <div class="mon"><div class="mn">${esc(me.form)} ${me.types.map(tb).join('')}</div>
  <div class="sub">${esc(me.nature)}／${esc(me.ability)}／${esc(meMon.item)}<br><b>${statLine(me.stats)}</b>（${ptsLine(meMon.pts)}）</div>
  ${hasStone?`<label class="tg"><input type="checkbox" data-mega="1" ${megaOn(state.party,state.meIdx)?'checked':''}> メガシンカする（1試合1体まで）</label>`:''}
  ${hpSlider('hpMe','自分の残りHP',c.hpMe,me)}</div></section>`;
  // 相手
- const others=Object.keys(FORMS).filter(f=>!pool[f]);
- const op=s=>`<option ${s===state.oppSp?'selected':''}>${esc(s)}</option>`;
- const optsSp=`<optgroup label="よく見る型を登録済み（${spList.length}匹）">${spList.map(op).join('')}</optgroup><optgroup label="その他のポケモン（自動の仮の型）">${others.map(op).join('')}</optgroup>`;
+const teamOpp=(state.team&&state.team.opp||[]).filter(s=>s&&FORMS[s]);
  h+=`<section class="card"><h2>相手のポケモン <small>（${state.mode==='single'?'シングル':'ダブル'}でよく見る型）</small></h2>
- <div class="pick"><div class="cur">選択中：<b>${esc(state.oppSp)}</b>${pool[state.oppSp]?' <span class="tag">型あり</span>':''}</div><input class="big" data-search="opp" placeholder="🔍 名前を入力して探す（ひらがなOK）" autocomplete="off"><div class="plist"></div></div>
- <div class="chips">${sets.map((s,i)=>`<button class="chip ${state.setIdx===i?'on':''}" data-act="set" data-i="${i}">${esc(s.label)}</button>`).join('')}${sets.length>1?`<button class="chip ${state.setIdx==='all'?'on':''}" data-act="set" data-i="all">全部の型</button>`:''}</div>`;
+ ${teamOpp.length?`<div class="sub">登録した相手のパーティー</div><div class="chips">${teamOpp.map(s=>`<button class="chip ${s===state.oppSp?'on':''}" data-act="pick" data-kind="opp" data-v="${esc(s)}">${esc(s)}</button>`).join('')}</div>`:''}<div class="pick"><div class="cur">選択中：<b>${esc(state.oppSp)}</b>${pool[state.oppSp]?' <span class="tag">型あり</span>':''}</div><input class="big" data-search="opp" placeholder="🔍 名前を入力して探す（ひらがなOK）" autocomplete="off"><div class="plist"></div></div>
+ <div class="chips">${sets.map((s,i)=>`<button class="chip ${state.setIdx===i?'on':''}" data-act="set" data-i="${i}">${esc(s.label)}</button>`).join('')}${sets.length>1?`<button class="chip ${state.setIdx==='all'?'on':''}" data-act="set" data-i="all">全部の型</button>`:''}<button class="chip add" data-act="cdOpen">✎ 型を自分で作る</button></div>${renderCustomEditor()}`;
  const showSets=state.setIdx==='all'?sets.map((s,i)=>[i,s]):[[state.setIdx,sets[state.setIdx]]];
  const opps=showSets.map(([i,s])=>({i,s,b:oppBattler(state.oppSp,s)}));
  opps.forEach(o=>{h+=`<div class="mon"><div class="mn">${esc(o.s.label)}：${esc(o.b.form)} ${o.b.types.map(tb).join('')}</div><div class="sub">${esc(o.s.nature)}／${esc(o.b.ability)}／${esc(o.s.item)}／${o.s.ptsKey}振り<br><b>${statLine(o.b.stats)}</b><br>技：${o.s.moves.map(esc).join('・')}</div></div>`;});
@@ -1345,7 +1396,7 @@ function pairEval(pi,i,useMega,sp){
  const m=state.parties[pi].mons[i]; const env=defaultEnv(state.mode);
  const me=buildBattler(m,'me',useMega);
  const ms=[],ts=[];
- for(const set of getSets(sp,state.mode)){
+ for(const set of setsFor(sp)){
   const o=buildBattler(Object.assign({sp},set),'opp');
   ms.push(analyze(me,o,env).score);
   const o2=buildBattler(Object.assign({sp},set),'me'); const me2=buildBattler(m,'opp',useMega);
@@ -1575,8 +1626,10 @@ function renderHelp(){
  <li><b>選出</b>：相手の6匹を登録すると、相手の選出予想・おすすめ選出・相手ごとに出すべきポケモンが出ます。</li>
  <li><b>分析</b>：パーティー比較（3パーティーの得意・苦手）、弱点チェック（タイプごとの弱点の数と攻撃範囲）、すばやさ比較（よく見る相手との速さの順番）を見られます。</li>
  <li><b>耐久調整</b>：対面画面の一番下で、相手の技を確定で耐えるのに必要なHPと防御（特防）の振り方を探せます。見つかった振り方はボタン1つでパーティーに反映できます。</li>
+ <li><b>型を自分で作る</b>：対面の相手の型の横の「✎ 型を自分で作る」で、対戦で見えた持ち物・技・振り方に合わせた型を作って保存できます。選出の判定にも使われます。</li>
  <li><b>共有</b>：編集画面の「パーティーを友達と共有」で、パーティーをコードにして送ったり、もらったコードを読み込んだりできます。</li>
- <li><b>編集</b>：パーティーの持ち物・性格・能力ポイント・技を変えられます。</li></ol></section>
+ <li><b>編集</b>：パーティーの持ち物・性格・能力ポイント・技を変えられます。</li>
+ <li>スマホがダークモードの時は、自動で暗い画面になります。前回見ていた画面は次に開いた時も残ります。</li></ol></section>
  <section class="card"><h2>計算の前提</h2><ul class="help">
  <li>レベル50。実数値は HP＝種族値＋75＋能力ポイント、その他＝（種族値＋20＋能力ポイント）×性格補正。</li>
  <li>乱数（85〜100%）の16通りすべてで計算しています。</li>
@@ -1597,7 +1650,7 @@ document.addEventListener('click',e=>{
  else if(a==='hp'){state.c[t.dataset.k]=+t.dataset.v;}
  else if(a==='resetC'){const keep={hpMe:state.c.hpMe,hpOpp:state.c.hpOpp};state.c=Object.assign({weatherSel:'auto',terrainSel:'auto',crit:false,burnMe:false,burnOpp:false,wallMe:'',wallOpp:'',twMe:false,twOpp:false,tr:false,hhMe:false,hhOpp:false,popMe:false,popOpp:false,disguise:true,glaiveMe:false,glaiveOpp:false,hits:3,fainted:0,rkMe:zr(),rkOpp:zr()},keep);}
  else if(a==='pick'){const v=t.dataset.v;
-  if(t.dataset.kind==='opp'){state.oppSp=v;state.setIdx=0;state.c.hpOpp=100;}
+  if(t.dataset.kind==='opp'){state.oppSp=v;state.setIdx=0;state.c.hpOpp=100;state.draft=null;}
   else if(t.dataset.kind==='team'){state.team.opp[+i]=v;saveTeam();}
   else{const P=state.parties[state.editParty];const k=+i;while(P.mons.length<=k)P.mons.push(null);
    if(!P.mons[k])P.mons[k]={sp:'',nature:'まじめ',ability:'',item:'なし',pts:{H:0,A:0,B:0,C:0,D:0,S:0},moves:['','','','']};
@@ -1611,15 +1664,20 @@ document.addEventListener('click',e=>{
    P.mons=P.mons.slice(0,6).map(m=>m&&FORMS[m.sp]?{sp:m.sp,nature:NATURES[m.nature]?m.nature:'まじめ',ability:String(m.ability||FORMS[m.sp].ab),item:String(m.item||'なし'),pts:Object.fromEntries(SK.map(k=>[k,Math.max(0,Math.min(32,+((m.pts||{})[k])||0))])),moves:(m.moves||[]).slice(0,4).map(String)}:null);
    state.parties[state.editParty]={name:String(P.name||'読み込んだパーティー').slice(0,30),mons:P.mons};saveParties();cmpCache={};teamCache={};}
   catch(err){msg.textContent='コードが正しくありません';return;} }
+ else if(a==='cdOpen'){const sets=setsFor(state.oppSp);const s=state.setIdx==='all'?sets[0]:sets[state.setIdx];state.draft={form:s.form,nature:s.nature,pts:Object.assign({H:0,A:0,B:0,C:0,D:0,S:0},s.pts),item:s.item||'なし',ab:s.ab||'',moves:[...s.moves,'','','',''].slice(0,4)};}
+ else if(a==='cdPreset'){state.draft.pts=Object.assign({H:0,A:0,B:0,C:0,D:0,S:0},PT[t.dataset.v]);}
+ else if(a==='cdCancel'){state.draft=null;}
+ else if(a==='cdDelete'){if(state.custom[state.mode])delete state.custom[state.mode][state.oppSp];saveCustom();state.draft=null;state.setIdx=0;teamCache={};}
+ else if(a==='cdSave'){const d=state.draft;(state.custom[state.mode]=state.custom[state.mode]||{})[state.oppSp]={form:d.form,nature:d.nature,pts:d.pts,item:d.item,ab:d.ab||null,moves:d.moves.map(x=>x.trim()).filter(Boolean)};saveCustom();state.draft=null;state.setIdx=setsFor(state.oppSp).length-1;teamCache={};}
  else if(a==='ana'){state.ana=t.dataset.v;}
  else if(a==='judge'){state.judge=t.dataset.v;try{localStorage.setItem('pchamp_judge',state.judge);}catch(e){}}
  else if(a==='clearTeam'){state.team={opp:['','','','','',''],seen:[0,0,0,0,0,0],mine:[0,0,0,0,0,0]};saveTeam();}
  else if(a==='cmpParty'){state.cmpParty=+i;}
  else if(a==='editParty'){state.editParty=+i;}
- else if(a==='goMatch'){state.party=+t.dataset.p;state.meIdx=+t.dataset.m;state.oppSp=t.dataset.sp;state.setIdx=getSets(t.dataset.sp,state.mode).length>1?'all':0;state.tab='match';state.c.hpMe=100;state.c.hpOpp=100;render();window.scrollTo(0,0);return;}
+ else if(a==='goMatch'){state.party=+t.dataset.p;state.meIdx=+t.dataset.m;state.oppSp=t.dataset.sp;state.setIdx=setsFor(t.dataset.sp).length>1?'all':0;state.tab='match';state.c.hpMe=100;state.c.hpOpp=100;render();window.scrollTo(0,0);return;}
  else if(a==='resetParty'){const pi=state.editParty;state.parties[pi]=JSON.parse(JSON.stringify(DEFAULT_PARTIES[pi]));saveParties();cmpCache={};}
  else return;
- state.team=loadTeam();try{const j=localStorage.getItem('pchamp_judge');if(JUDGE[j])state.judge=j;}catch(e){}render();
+ state.team=loadTeam();loadView();try{const j=localStorage.getItem('pchamp_judge');if(JUDGE[j])state.judge=j;}catch(e){}render();
 });
 document.addEventListener('toggle',e=>{if(e.target.dataset&&e.target.dataset.cond)state.condOpen=e.target.open;},true);
 function onInput(e){
@@ -1630,8 +1688,16 @@ function onInput(e){
  if(t.dataset.c){const k=t.dataset.c;let v=t.type==='checkbox'?t.checked:t.value;if(t.dataset.num||k==='hits'||k==='fainted')v=+v;state.c[k]=v;if(e.type==='input'&&t.type==='range'){const lab=t.parentElement.querySelector('label b');if(lab)lab.textContent=v+'%';return;}render();return;}
  if(t.dataset.rk){state.c[t.dataset.rk][t.dataset.k]=+t.value;render();return;}
  if(t.dataset.mega){state.mega[megaKey(state.party,state.meIdx)]=t.checked;cmpCache={};render();return;}
+ if(t.dataset.cd){const d=state.draft;const f=t.dataset.cd;
+  if(f==='pt')d.pts[t.dataset.k]=Math.max(0,Math.min(32,parseInt(t.value)||0));
+  else if(f==='mv')d.moves[+t.dataset.j]=t.value;
+  else d[f]=t.value;
+  if(f==='form'){const F=FORMS[d.form];if(F.mega)d.item=stoneOf(d.form);else if(STONES[d.item])d.item='なし';}
+  if(f==='item'){if(STONES[d.item]&&STONES[d.item][0].includes(state.oppSp))d.form=STONES[d.item][1];else if(FORMS[d.form].mega)d.form=state.oppSp;}
+  if(e.type==='change')render();return;}
  if(t.dataset.sp==='tw'){state.spdTw=t.checked;render();return;}
  if(t.dataset.spfilter){state.spdFilter=t.value;if(e.type==='change')render();else{clearTimeout(window._sf);window._sf=setTimeout(()=>{const pos=t.selectionStart;render();const n=document.querySelector('[data-spfilter]');if(n){n.focus();n.setSelectionRange(pos,pos);}},250);}return;}
+ if(t.dataset.act==='partySel'){state.party=+t.value;state.meIdx=0;render();return;}
  if(t.dataset.act==='bulkMove'){state.bulkMove=t.value;render();return;}
  if(t.dataset.act==='oppSp'){state.oppSp=t.value;state.setIdx=0;state.c.hpOpp=100;render();return;}
  if(t.dataset.pn){state.parties[state.editParty].name=t.value;saveParties();return;}
@@ -1645,11 +1711,11 @@ function onInput(e){
   else if(f==='mv'){m.moves[+t.dataset.j]=t.value.trim();}
   else m[f]=t.value;
   saveParties();cmpCache={};
-  if(e.type==='change') state.team=loadTeam();try{const j=localStorage.getItem('pchamp_judge');if(JUDGE[j])state.judge=j;}catch(e){}render();
+  if(e.type==='change') state.team=loadTeam();loadView();try{const j=localStorage.getItem('pchamp_judge');if(JUDGE[j])state.judge=j;}catch(e){}render();
  }
 }
 document.addEventListener('focusin',e=>{const t=e.target;if(t.dataset&&t.dataset.search){const l=t.nextElementSibling;l.innerHTML=pickList(t.dataset.search,t.dataset.search!=='opp'?'':t.value,t.dataset.i);l.classList.add('on');if(t.dataset.search!=='opp')t.select();}});
 document.addEventListener('input',onInput);
 document.addEventListener('change',onInput);
-state.team=loadTeam();try{const j=localStorage.getItem('pchamp_judge');if(JUDGE[j])state.judge=j;}catch(e){}render();
+state.team=loadTeam();loadView();try{const j=localStorage.getItem('pchamp_judge');if(JUDGE[j])state.judge=j;}catch(e){}render();
 </script></body></html>
