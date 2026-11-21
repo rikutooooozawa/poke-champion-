@@ -145,6 +145,17 @@ table.cmp th{background:#232735}.tot td{background:#1f2230}
 .sub b{color:var(--ink)}.g{color:#5fd391}.r{color:#ff7b7b}
 .pi:active{background:#2c3150}.ced{border-color:#3a3f6a}
 }
+
+.brow{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.brow .bn{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:6px 8px;font-size:13.5px;min-width:118px;text-align:left}
+.brow.act .bn{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:700}
+.brow.down{opacity:.45}
+.hpc{display:flex;gap:3px;flex-wrap:wrap}
+.hpc button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:6px;font-size:12px;padding:4px 6px}
+.hpc button.on{background:#1f9d55;color:#fff;border-color:#1f9d55}
+.hpc button.dn.on{background:var(--r);border-color:var(--r)}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#1d2030;color:#fff;padding:10px 14px;border-radius:10px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:9;max-width:90%}
+#toast.on{opacity:1}
 </style></head>
 <body><header><h1><span>ポケチャン ダメ計＆対面ナビ</span><span class="mode"><button data-mode="single">シングル</button><button data-mode="double">ダブル</button></span></h1>
 <nav class="tabs"><button data-tab="match">対面</button><button data-tab="team">選出</button><button data-tab="cmp">分析</button><button data-tab="edit">編集</button><button data-tab="help">説明</button></nav></header>
@@ -1197,6 +1208,7 @@ function pickList(kind,q,i){
 }
 function saveView(){try{localStorage.setItem('pchamp_view',JSON.stringify({tab:state.tab,mode:state.mode,party:state.party,meIdx:state.meIdx,oppSp:state.oppSp,ana:state.ana}));}catch(e){}}
 function loadView(){try{const v=JSON.parse(localStorage.getItem('pchamp_view')||'null');if(v){['tab','mode','ana'].forEach(k=>{if(typeof v[k]==='string')state[k]=v[k];});if(v.party>=0&&v.party<3)state.party=v.party;if(v.meIdx>=0&&v.meIdx<6)state.meIdx=v.meIdx;if(v.oppSp&&FORMS[v.oppSp])state.oppSp=v.oppSp;}}catch(e){}}
+function alertMsg(m){let d=document.getElementById('toast');if(!d){d=document.createElement('div');d.id='toast';document.body.appendChild(d);}d.textContent=m;d.classList.add('on');clearTimeout(window._tt);window._tt=setTimeout(()=>d.classList.remove('on'),2500);}
 function render(){
  document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('on',b.dataset.tab===state.tab));
  document.querySelectorAll('.mode button').forEach(b=>b.classList.toggle('on',b.dataset.mode===state.mode));
@@ -1471,10 +1483,14 @@ function renderTeam(){
  }
  // 自分の選出登録 → 対面ごとの出すべきポケモン
  h+=`<section class="card"><h2>自分の選出を登録</h2><div class="sub">実際に選んだポケモンにチェック（チェックすると、それを入れた選出で再計算します）。</div><div class="chips">${A.myIdx.map(i=>`<label class="chip ${T.mine[i]?'on':''}"><input type="checkbox" data-mine="${i}" ${T.mine[i]?'checked':''} style="display:none">${esc(A.mons[i].sp)}</label>`).join('')}</div>`;
- const chosen=A.myIdx.filter(i=>T.mine[i]); const pool=top?top.c:A.myIdx;
- if(chosen.length&&chosen.length<A.N) h+=`<div class="sub">あと${A.N-chosen.length}匹は、おすすめから自動で補っています。</div>`;
- const mg=top?top.mg:-1;
- h+=`<h3>相手が出てきたら誰を出す？</h3>`;
+ const chosen=A.myIdx.filter(i=>T.mine[i]); const full=chosen.length===A.N; const pool=full?chosen:(top?top.c:A.myIdx);
+ if(!full) h+=`<div class="adv warn">実際に出した${A.N}匹をタップして選んでください（今 ${chosen.length}/${A.N}匹）。${A.N}匹そろうと、その${A.N}匹だけで試合中の行動を出します。${chosen.length?'足りない分はおすすめで補って表示しています。':''}</div>`;
+ const stoneIn=pool.filter(i=>hasStoneMon(A.mons[i]));
+ if(T.megaPick==null||!pool.includes(T.megaPick)) T.megaPick=(top&&pool.includes(top.mg))?top.mg:(stoneIn[0]!=null?stoneIn[0]:-1);
+ const mg=T.megaPick;
+ if(stoneIn.length>1) h+=`<div class="sub">メガシンカするポケモン：</div><div class="chips">${stoneIn.map(i=>`<button class="chip ${mg===i?'on':''}" data-act="megaPick" data-i="${i}">${esc(A.mons[i].sp)}</button>`).join('')}<button class="chip ${mg===-1?'on':''}" data-act="megaPick" data-i="-1">しない</button></div>`;
+ if(full) h+=`</section>`+renderBattle(A,pool,mg)+`<section class="card">`;
+ h+=`<h3>相手が出てきたら誰を出す？${full?'（選んだ'+A.N+'匹の中から）':''}</h3>`;
  A.opps.forEach(o=>{
   const arr=pool.map(i=>({i,e:A.best(i,o.j,i===mg)})).sort((x,y)=>(y.e.mine-x.e.mine)||(x.e.theirs-y.e.theirs));
   const b=arr[0]; const bad=arr.filter(x=>x.e.theirs>=2).map(x=>monName(pi,x.i,x.i===mg));
@@ -1487,6 +1503,85 @@ function renderTeam(){
  return h;
 }
 
+
+
+// ---------- 試合中の行動ナビ ----------
+function oppSetForNav(sp){const s=setsFor(sp);const c=s.find(x=>x.custom);return c||s[0];}
+function bState(){const T=state.team;if(!T.bt)T.bt={myHp:{},myDown:{},oppHp:{},oppDown:{},myAct:[],oppAct:[]};return T.bt;}
+function hpCtl(kind,idx,val,down){return `<div class="hpc">${[100,75,50,25,10].map(v=>`<button class="${!down&&val===v?'on':''}" data-act="bhp" data-kind="${kind}" data-i="${idx}" data-v="${v}">${v}</button>`).join('')}<button class="dn ${down?'on':''}" data-act="bdown" data-kind="${kind}" data-i="${idx}">ひんし</button></div>`;}
+function optionsFor(meM,mi,useMega,oppSp,oHp,myHp,bench,pi,env0){
+ // 行動の候補（攻撃・交代）を点数付けする
+ const set=oppSetForNav(oppSp); const o=buildBattler(Object.assign({sp:oppSp},set),'opp');
+ const me=buildBattler(meM,'me',useMega);
+ const env=Object.assign({},env0,{hp:{me:myHp,opp:oHp}});
+ const a=analyze(me,o,env); const out=[];
+ const oppBest=a.oppBest; const oppK1=oppBest?oppBest.ko.p1:0;
+ a.atk.filter(r=>!r.unknown).forEach(r=>{
+  if(r.zero||r.dmg[15]===0){return;}
+  const fs=(()=>{const p=r.prio,q=oppBest?oppBest.prio:0;if(p!==q)return p>q;return env.tr?a.sMe<a.sOp:a.sMe>a.sOp;})();
+  const avg=r.dmg.reduce((x,y)=>x+y,0)/16/o.stats.H*100; const oppNow=Math.max(1,oHp);
+  const ko=r.ko.p1; const surv=fs?1:(1-oppK1);
+  let v=surv*(ko*100+(1-ko)*Math.min(1,avg/oppNow)*55)-(fs?0:oppK1*25)+(fs?12:0);
+  const sashSave=!fs&&me.item==='きあいのタスキ'&&myHp>=100&&oppBest&&oppBest.dmg[0]>=me.stats.H;
+  if(sashSave) v-=10;
+  if(MOVES[r.name].sucker) v-=8; if(MOVES[r.name].first) v-=4; if(r.notes.some(n=>n.includes('ためる'))) v-=30;
+  const why=ko>=0.9999?(fs?'先に動けて確定で倒せる':'耐えれば確定で倒せる'):ko>0?`倒せる確率${Math.round(ko*100)}%`:`${Math.round(avg)}%くらい削れる（相手の残り${oHp}%）`;
+  const risk=(!fs&&oppK1>0?`／先に『${oppBest.name}』で倒される確率${Math.round(oppK1*100)}%`:'')+(sashSave?'／きあいのタスキ頼み':'');
+  out.push({type:'atk',v,label:`『${r.name}』で攻撃`,why:why+risk});
+ });
+ // 積み技
+ const setup=me.moves.find(m=>MOVES[m]&&MOVES[m].setup);
+ if(setup&&oppBest){const twice=oppBest.dmg[15]/me.stats.H*100*2<myHp; if(twice) out.push({type:'setup',v:45,label:`『${setup}』を積む`,why:'相手の攻撃を2回以上耐えられる'});}
+ // 交代
+ bench.forEach(bi=>{const bm=state.parties[pi].mons[bi.i];const b=buildBattler(bm,'me',bi.mega);
+  const e2=Object.assign({},env0,{hp:{me:bi.hp,opp:oHp}});
+  let worst=0,wn='';(o.moves||[]).forEach(mv=>{const r=calc(o,b,mv,resolveField(b,o,e2));if(r&&!r.unknown&&!r.zero){const p=r.dmg[15]/b.stats.H*100;if(p>worst){worst=p;wn=mv;}}});
+  const left=bi.hp-worst; if(left<=0){out.push({type:'sw',v:-50,label:`${b.form}に交代`,why:`交代した直後に『${wn}』で倒される可能性が高い`});return;}
+  const a2=analyze(b,o,Object.assign({},e2,{hp:{me:Math.max(1,Math.floor(left)),opp:oHp}}));
+  const v=a2.score*22+Math.max(0,left)*0.15-(worst>50?10:0)-8;
+  out.push({type:'sw',v,label:`${b.form}に交代`,why:`受けるダメージ最大${Math.round(worst)}%（『${wn}』）→ 交代後は${SYM[a2.score]}`});
+ });
+ out.sort((x,y)=>y.v-x.v);
+ return {opts:out,set,a,me,o};
+}
+function renderBattle(A,pool,mg){
+ const T=state.team; const B=bState(); const pi=A.pi; const N=A.N; const nAct=state.mode==='single'?1:2;
+ const env0=defaultEnv(state.mode);
+ B.myAct=(B.myAct||[]).filter(i=>pool.includes(i)&&!B.myDown[i]).slice(0,nAct);
+ const seenOpp=A.opps.filter(o=>!B.oppDown[o.j]);
+ B.oppAct=(B.oppAct||[]).filter(j=>seenOpp.some(o=>o.j===j)).slice(0,nAct);
+ const myHp=i=>B.myHp[i]==null?100:B.myHp[i]; const oHp=j=>B.oppHp[j]==null?100:B.oppHp[j];
+ let h=`<section class="card hl"><h2>試合中の行動ナビ</h2><div class="sub">場に出ているポケモンをタップして選び、HPが減ったらボタンで合わせてください。選んだ${N}匹の中から、今一番いい行動を出します。</div>`;
+ h+=`<h3>自分（場に出ているのを${nAct}匹タップ）</h3>`;
+ pool.forEach(i=>{const down=!!B.myDown[i];const on=B.myAct.includes(i);
+  h+=`<div class="brow ${on?'act':''} ${down?'down':''}"><button class="bn" data-act="bact" data-kind="me" data-i="${i}">${on?'▶ ':''}${esc(monName(pi,i,i===mg))}</button>${hpCtl('me',i,myHp(i),down)}</div>`;});
+ h+=`<h3>相手（場に出ているのを${nAct}匹タップ）</h3>`;
+ A.opps.forEach(o=>{const down=!!B.oppDown[o.j];const on=B.oppAct.includes(o.j);
+  h+=`<div class="brow ${on?'act':''} ${down?'down':''}"><button class="bn" data-act="bact" data-kind="opp" data-i="${o.j}">${on?'▶ ':''}${esc(o.sp)}</button>${hpCtl('opp',o.j,oHp(o.j),down)}</div>`;});
+ h+=`<button class="btn sm2 gray" data-act="bReset">HP・ひんしをリセット</button>`;
+ if(!B.myAct.length||!B.oppAct.length){h+=`<div class="adv warn">自分と相手の場のポケモンを選ぶと、おすすめの行動が出ます。</div></section>`;return h;}
+ h+=`<h3>おすすめの行動</h3>`;
+ B.myAct.forEach(mi=>{
+  const benchIdx=pool.filter(i=>!B.myAct.includes(i)&&!B.myDown[i]).map(i=>({i,hp:myHp(i),mega:i===mg}));
+  const per=B.oppAct.map(oj=>{const sp=T.opp[oj];return {oj,sp,R:optionsFor(state.parties[pi].mons[mi],mi,mi===mg,sp,oHp(oj),myHp(mi),benchIdx,pi,env0)};});
+  if(nAct===1){const R=per[0].R;
+   h+=`<div class="sub">${esc(monName(pi,mi,mi===mg))} vs ${esc(per[0].sp)}（相手は「${esc(R.set.label)}」で計算）・すばやさ ${R.a.sMe} 対 ${R.a.sOp}</div>`;
+   R.opts.slice(0,4).forEach((x,k)=>{h+=`<div class="adv ${k===0?'good':x.v<0?'bad':'ok'}"><b>${k+1}位</b> ${esc(x.label)}<br><small>${esc(x.why)}</small></div>`;});
+   if(!R.opts.length) h+=`<div class="adv bad">有効な行動が見つかりません。交代先もいません。</div>`;
+   h+=`<button class="btn sm2" data-act="goMatch" data-p="${pi}" data-m="${mi}" data-sp="${esc(per[0].sp)}">この対面の詳しい計算を見る</button>`;
+  }else{
+   // ダブル：相手2体それぞれへの一番いい攻撃と、狙う相手
+   let best=null;
+   per.forEach(p=>{const at=p.R.opts.find(x=>x.type==='atk');if(at&&(!best||at.v>best.v))best={...at,sp:p.sp};});
+   h+=`<div class="adv ${best?'good':'bad'}"><b>${esc(monName(pi,mi,mi===mg))}</b>：${best?`${esc(best.sp)}に${esc(best.label)}<br><small>${esc(best.why)}</small>`:'有効な攻撃がありません'}</div>`;
+   per.forEach(p=>{const ob=p.R.a.oppBest; if(ob&&ob.ko.p1>0) h+=`<div class="adv warn"><small>⚠ ${esc(p.sp)}の『${esc(ob.name)}』で倒される確率${Math.round(ob.ko.p1*100)}%</small></div>`;});
+   const sw=per.map(p=>p.R.opts.filter(x=>x.type==='sw'&&x.v>0)[0]).filter(Boolean).sort((x,y)=>y.v-x.v)[0];
+   if(sw&&(!best||best.v<30)) h+=`<div class="adv ok"><small>交代するなら：${esc(sw.label)}（${esc(sw.why)}）</small></div>`;
+  }
+ });
+ h+=`<div class="sub">計算は「相手は一番ダメージの大きい技を使う」「交代した直後に相手の攻撃を受ける」前提の目安です。</div></section>`;
+ return h;
+}
 
 // ---------- 分析 ----------
 function renderAna(){
@@ -1669,6 +1764,13 @@ document.addEventListener('click',e=>{
  else if(a==='cdCancel'){state.draft=null;}
  else if(a==='cdDelete'){if(state.custom[state.mode])delete state.custom[state.mode][state.oppSp];saveCustom();state.draft=null;state.setIdx=0;teamCache={};}
  else if(a==='cdSave'){const d=state.draft;(state.custom[state.mode]=state.custom[state.mode]||{})[state.oppSp]={form:d.form,nature:d.nature,pts:d.pts,item:d.item,ab:d.ab||null,moves:d.moves.map(x=>x.trim()).filter(Boolean)};saveCustom();state.draft=null;state.setIdx=setsFor(state.oppSp).length-1;teamCache={};}
+ else if(a==='megaPick'){state.team.megaPick=+i;saveTeam();}
+ else if(a==='bact'){const B=bState();const n=state.mode==='single'?1:2;const k=t.dataset.kind==='me'?'myAct':'oppAct';const v=+i;
+  if(B[k].includes(v))B[k]=B[k].filter(x=>x!==v);else{B[k].push(v);if(B[k].length>n)B[k].shift();}
+  if(t.dataset.kind==='opp'){state.team.seen[v]=1;} saveTeam();}
+ else if(a==='bhp'){const B=bState();const k=t.dataset.kind==='me'?'myHp':'oppHp';const d=t.dataset.kind==='me'?'myDown':'oppDown';B[k][+i]=+t.dataset.v;B[d][+i]=false;saveTeam();}
+ else if(a==='bdown'){const B=bState();const d=t.dataset.kind==='me'?'myDown':'oppDown';B[d][+i]=!B[d][+i];saveTeam();}
+ else if(a==='bReset'){const T=state.team;T.bt={myHp:{},myDown:{},oppHp:{},oppDown:{},myAct:[],oppAct:[]};saveTeam();}
  else if(a==='ana'){state.ana=t.dataset.v;}
  else if(a==='judge'){state.judge=t.dataset.v;try{localStorage.setItem('pchamp_judge',state.judge);}catch(e){}}
  else if(a==='clearTeam'){state.team={opp:['','','','','',''],seen:[0,0,0,0,0,0],mine:[0,0,0,0,0,0]};saveTeam();}
@@ -1683,7 +1785,7 @@ document.addEventListener('toggle',e=>{if(e.target.dataset&&e.target.dataset.con
 function onInput(e){
  const t=e.target;
  if(t.dataset.seen!=null&&e.type==='change'){state.team.seen[+t.dataset.seen]=t.checked?1:0;saveTeam();render();return;}
- if(t.dataset.mine!=null&&e.type==='change'){state.team.mine[+t.dataset.mine]=t.checked?1:0;saveTeam();render();return;}
+ if(t.dataset.mine!=null&&e.type==='change'){const N=pickN();const cnt=state.team.mine.filter(Boolean).length;if(t.checked&&cnt>=N){t.checked=false;alertMsg(`選べるのは${N}匹までです。先にほかのチェックを外してください`);return;}state.team.mine[+t.dataset.mine]=t.checked?1:0;saveTeam();render();return;}
  if(t.dataset.search){ if(e.type==='input'){const l=t.nextElementSibling;l.innerHTML=pickList(t.dataset.search,t.value,t.dataset.i);l.classList.add('on');} return; }
  if(t.dataset.c){const k=t.dataset.c;let v=t.type==='checkbox'?t.checked:t.value;if(t.dataset.num||k==='hits'||k==='fainted')v=+v;state.c[k]=v;if(e.type==='input'&&t.type==='range'){const lab=t.parentElement.querySelector('label b');if(lab)lab.textContent=v+'%';return;}render();return;}
  if(t.dataset.rk){state.c[t.dataset.rk][t.dataset.k]=+t.value;render();return;}
